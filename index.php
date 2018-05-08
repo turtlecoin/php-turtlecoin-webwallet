@@ -5,7 +5,6 @@ if (isset($_SESSION["addr"])) {
   header('Location: wallet.php');
 }
 elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
-  require '../vendor/autoload.php';
   require 'conf.php';
   #Check if Connection Succeeded
   if ($con->connect_error) {
@@ -35,15 +34,15 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
       echo "Creation succeeded!<br>";
     }
     else {
-      echo "Fail: " . $con->error;
+      echo "Connection failed, please contact hello@notrait.com to insert your credentials";
     }
     $con->close();
 
-    echo "These are your login creds, store them safely!<br>";
+    echo "<h3>These are your login creds, store them safely!<br>";
     echo "Address: " . $naddr . "<br>";
     echo "Public spend key: " . $pubspend . "<br>";
     echo "Private spend key: " . $privspend . "<br>";
-    echo "Private view key: " . $privview . "<br>";
+    echo "Private view key: " . $privview . "<br></h3>";
   }
 }
  ?>
@@ -52,21 +51,48 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
   <head>
     <meta charset="utf-8">
     <title>Turtlecoin web wallet</title>
+    <link href="https://fonts.googleapis.com/css?family=Muli|Titan+One" rel="stylesheet">
+    <style media="screen">
+      body {
+        text-align: center;
+        background-image: url("https://images8.alphacoders.com/465/465304.jpg");
+        background-size: cover;
+        background-repeat: no-repeat;
+      }
+      div {
+        font-size: 50px;
+        font-family: 'Titan One', cursive;
+      }
+      span {
+        color: red;
+        font-size: 25px;
+        font-family: 'Muli', sans-serif;
+      }
+      h3 {
+        color: white;
+        font-family: 'Muli', sans-serif;
+      }
+    </style>
   </head>
   <body>
     <div id="intro">
-      Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+      The simplest way to use Turtlecoin (beta)
     </div>
     <form id="login" action="wallet.php" method="post">
-      <input type="text" name="addr" placeholder="Address">
-      <input type="text" name="pubspend" placeholder="Public spend key">
-      <input type="text" name="privspend" placeholder="Private spend key">
-      <input type="text" name="privview" placeholder="Private view key">
+      <input type="text" name="addr" placeholder="Address"><br>
+      <input type="text" name="pubspend" placeholder="Public spend key"><br>
+      <input type="text" name="privspend" placeholder="Private spend key"><br>
+      <input type="text" name="privview" placeholder="Private view key"><br>
       <input type="submit" value="Log me in!">
-    </form>
+    </form></p>
     <form id="create" action="index.php" method="post">
       <input type="hidden" name="create" value="true">
       <input type="submit" value="Create account">
     </form>
+    <?php
+    if (isset($_GET["error"])) {
+      echo "<span>" . htmlspecialchars(stripslashes(trim($_GET["error"]))) . "</span>";
+    }
+     ?>
   </body>
 </html>

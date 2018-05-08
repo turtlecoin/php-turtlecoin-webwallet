@@ -1,4 +1,5 @@
 <?php
+require '../vendor/autoload.php';
 #Config
 use TurtleCoin\Walletd;
 
