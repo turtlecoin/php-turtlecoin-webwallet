@@ -10,23 +10,65 @@ if (isset($_GET["logout"])) {
   header('Location: wallet.php');
 }
 elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $addr = $_POST["addr"];
-    $pview = $_POST["privview"];
-    $pubspend = $_POST["pubspend"];
-    $pspend = $_POST["privspend"];
-
-    $sql = $con->prepare("SELECT address, privview, pubspend, privspend FROM addresses WHERE address=? AND privview=? AND pubspend=? AND privspend=?");
-    $sql->bind_param('ssss', $addr, $pview, $pubspend, $pspend);
-    $suc = $sql->execute();
-    if ($suc) {
-      echo "You are logged in!";
-      $_SESSION["addr"] = $addr;
-      header('Location: wallet.php');
+    if (isset($_POST["trans"])) {
+      #Get variables and set them
+      $anonymity = intval($_POST["mixin"]);
+      $rec = $_POST["addr"];
+      $rawfee = (float) $_POST["fee"];
+      $rawamount = (float) $_POST["amount"];
+      $fee = intval($rawfee * 100);
+      $amount = intval($rawamount * 100);
+      $pid = $_POST["pid"];
+      $addresses = array($_SESSION["addr"]);
+      $transfers = [
+         [
+            "address" => $rec,
+            "amount"  => $amount
+         ]
+      ];
+      if (strlen($pid) != 0) {
+        $trans = $walletd->sendTransaction($anonymity, $transfers, $fee, $addresses, 0, null, $pid)->getBody()->getContents();
+      }
+      else {
+        $trans = $walletd->sendTransaction($anonymity, $transfers, $fee, $addresses, 0, null)->getBody()->getContents();
+      }
+      #Decode
+      $dectrans = json_decode($trans, true);
+      #Check for errors
+      if (isset($dectrans["error"])) {
+        if ($dectrans["error"]["message"] == "Wrong amount") {
+          die("<script>alert('Insufficient funds');</script>");
+        }
+        elseif ($dectrans["error"]["message"] == "Bad address"){
+          die("<script>alert('The sender/receiver address is invalid');</script>");
+        }
+        else {
+          die("<script>alert('" . $dectrans["error"]["message"] . "');</script>");
+        }
+      }
+      else {
+        echo "Transaction sent to blockchain: <a target='_blank' href='https://turtle-coin.com/?hash=" . $dectrans["result"]["transactionHash"] . "#blockchain_transaction'>Watch status</a>";
+      }
     }
     else {
-      header('Location: index.php?error=The keys are not valid!');
-    }
-    $sql->close();
+      $addr = $_POST["addr"];
+      $pview = $_POST["privview"];
+      $pubspend = $_POST["pubspend"];
+      $pspend = $_POST["privspend"];
+
+      $sql = $con->prepare("SELECT address, privview, pubspend, privspend FROM addresses WHERE address=? AND privview=? AND pubspend=? AND privspend=?");
+      $sql->bind_param('ssss', $addr, $pview, $pubspend, $pspend);
+      $suc = $sql->execute();
+      if ($suc) {
+        echo "You are logged in!";
+        $_SESSION["addr"] = $addr;
+        header('Location: wallet.php');
+      }
+      else {
+        header('Location: index.php?error=The keys are not valid!');
+      }
+      $sql->close();
+  }
 }
 elseif (!isset($_SESSION["addr"])) {
   logout();
@@ -115,47 +157,6 @@ function logout() {
       <input type="submit" value="Create transaction">
     </form>
     <?php
-    if ($_SERVER["REQUEST_METHOD"] == "POST") {
-      if (isset($_POST["trans"])) {
-        #Get variables and set them
-        $anonymity = intval($_POST["mixin"]);
-        $rec = $_POST["addr"];
-        $rawfee = (float) $_POST["fee"];
-        $rawamount = (float) $_POST["amount"];
-        $fee = intval($rawfee * 100);
-        $amount = intval($rawamount * 100);
-        $pid = $_POST["pid"];
-        $transfers = [
-           [
-              "address" => $rec,
-              "amount"  => $amount
-           ]
-        ];
-        if (strlen($pid) != 0) {
-          $trans = $walletd->sendTransaction($anonymity, $transfers, $fee, null, 0, null, $pid)->getBody()->getContents();
-        }
-        else {
-          $trans = $walletd->sendTransaction($anonymity, $transfers, $fee, null, 0, null)->getBody()->getContents();
-        }
-        #Decode
-        $dectrans = json_decode($trans, true);
-        #Check for errors
-        if (isset($dectrans["error"])) {
-          if ($dectrans["error"]["message"] == "Wrong amount") {
-            die("<script>alert('Insufficient funds');</script>");
-          }
-          elseif ($dectrans["error"]["message"] == "Bad address"){
-            die("<script>alert('The sender/receiver address is invalid');</script>");
-          }
-          else {
-            die("<script>alert('" . $dectrans["error"]["message"] . "');</script>");
-          }
-        }
-        else {
-          echo "Transaction sent to blockchain: <a target='_blank' href='https://turtle-coin.com/?hash=" . $dectrans["result"]["transactionHash"] . "#blockchain_transaction'>Watch status</a>";
-        }
-      }
-    }
     echo "</p><div>Transactions<br>";
     $addr = array($_SESSION["addr"]);
     $status = $walletd->getStatus()->getBody()->getContents();
@@ -166,16 +167,19 @@ function logout() {
     $decltrans = json_decode($ltrans, true);
     $pcount = count($decltrans["result"]["items"]);
     for ($i=0; $i < $pcount; $i++) {
-      $tcount = count($decltrans["result"]["items"][$i]["transactions"][0]["transfers"]);
-      for ($j=0; $j < $tcount; $j++) {
-          if ($addr[0] == $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["address"]) {
-            if ($decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] < 0) {
-              echo "Outgoing: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
+      $test = count($decltrans["result"]["items"][$i]["transactions"]);
+      for ($h=0; $h < $test; $h++) {
+        $tcount = count($decltrans["result"]["items"][$i]["transactions"][$h]["transfers"]);
+        for ($j=0; $j < $tcount; $j++) {
+              if ($addr[0] == $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["address"]) {
+                if ($decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] < 0) {
+                  echo "Outgoing: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
+                }
+                else {
+                  echo "Incoming: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;+" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
+                }
             }
-            else {
-              echo "Incoming: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;+" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
-            }
-        }
+          }
       }
     }
      ?>
