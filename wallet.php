@@ -6,8 +6,38 @@ require 'conf.php';
 use chillerlan\QRCode\QRCode;
 
 if (isset($_GET["logout"])) {
-  session_destroy();
-  header('Location: wallet.php');
+    logout('Your session timed out!');
+}
+if (isset($_GET["del"])) {
+    $addr = $_SESSION["addr"];
+    $sql = "SELECT address, id FROM addresses WHERE address='$addr'";
+    $result = $con->query($sql);
+    if ($result->num_rows > 0) {
+        while ($a = $result->fetch_assoc()) {
+            $to = $a["id"];
+            $del = $con->prepare("DELETE FROM addresses WHERE addresses.id = $to");
+            $res = $del->execute();
+            if ($res) {
+                #Delete address
+                $resp = $walletd->deleteAddress($addr)->getBody()->getContents();
+                #Decode
+                $decresp = json_decode($resp, true);
+                #Check for errors
+                if (isset($decresp["error"])) {
+                    logout('We were able to delete your wallet from our db, but our payment gate was not able to delete it, please contact us');
+                }
+                else {
+                    logout("Address deleted successfully");
+                }
+            }
+            else {
+                logout("Failed to delete address, try again later, or contact us.");
+            }
+        }
+    }
+    else {
+        logout("This address doesn't exists");
+    }
 }
 elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["trans"])) {
@@ -47,7 +77,8 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
       }
       else {
-        echo "Transaction sent to blockchain: <a target='_blank' href='https://turtle-coin.com/?hash=" . $dectrans["result"]["transactionHash"] . "#blockchain_transaction'>Watch status</a>";
+        header('Location: wallet.php?sent=true&tx=' . $dectrans["result"]["transactionHash"] . '');
+      //  echo "Transaction sent to blockchain: <a target='_blank' href='https://turtle-coin.com/?hash=" . $dectrans["result"]["transactionHash"] . "#blockchain_transaction'>Watch status</a>";
       }
     }
     else {
@@ -71,17 +102,18 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
   }
 }
 elseif (!isset($_SESSION["addr"])) {
-  logout();
+  logout("Your session timed out!");
 }
-function logout() {
-  header('Location: index.php?error=Your session timed out!');
+function logout($why) {
+    session_destroy();
+    header('Location: index.php?error=' . $why . '');
 }
  ?>
 <!DOCTYPE html>
 <html>
  <head>
    <meta charset="utf-8">
-   <title>You wallet</title>
+   <title>Your wallet</title>
    <link href="https://fonts.googleapis.com/css?family=Muli|Titan+One" rel="stylesheet">
    <style media="screen">
      form, input, select {
@@ -98,7 +130,17 @@ function logout() {
      }
    </style>
    <script>
-   function copy(){var copyText = document.getElementById('addr'); copyText.select(); document.execCommand('Copy'); document.getElementById('btn').innerHTML = 'Copied!'}</script>
+   function copy(){
+       let copyText = document.getElementById('addr');
+       copyText.select(); document.execCommand('Copy');
+       document.getElementById('btn').innerHTML = 'Copied!'
+   }
+   function copy2(){
+       let copyText = document.getElementById('payid');
+       copyText.select(); document.execCommand('Copy');
+       document.getElementById('btn2').innerHTML = 'Copied!'
+   }
+   </script>
  </head>
  <body>
    <a href="wallet.php?logout=true">Logout</a></p>
@@ -108,12 +150,29 @@ function logout() {
      bal($_SESSION["addr"], $walletd);
      status($walletd);
    }
+   if (isset($_GET["sent"])) {
+       showtx($_GET["tx"]);
+   }
    function bal($addr, $walletd) {
      $bal = $walletd->getBalance($addr)->getBody()->getContents();
      $decbal = json_decode($bal, true);
      $balance = intval($decbal["result"]["availableBalance"]) / 100;
      $lbalance = intval($decbal["result"]["lockedAmount"]) / 100;
-     echo "Your wallet address: <br><input id='addr' size='100%' type='text' value=" . $addr . " readonly><button id='btn' onclick='copy()'>Copy</button><br><img style='background-color: #fff;' src=" . (new QRCode)->render($addr) . "><br>" . "Balance: " . $balance . " TRTL,  Locked: " . $lbalance . " TRTL</p>";
+     echo "Your wallet address: <br><input id='addr' size='100%' type='text' value=" . $addr . " readonly><button id='btn' onclick='copy()'>Copy</button>";
+     if (isset($_GET["genpid"])) {
+         try {
+             $bytes = random_bytes(32);
+         } catch (Exception $e) {
+             echo "Failed to generate payment id";
+         }
+         $hex = bin2hex($bytes);
+         echo "<br>Your randomly generated payment id:<br><input id='payid' type='text' size='61%' value=" . $hex . "><button id='btn2' onclick='copy2()'>Copy</button><a href='wallet.php'><button>Stop generating</button></a>";
+         echo "<br><img style='background-color: #fff;' src=" . (new QRCode)->render('address:' . $addr . 'paymentic:' . $hex) . "><br>" . "Balance: " . $balance . " TRTL,  Locked: " . $lbalance . " TRTL</p>";
+     }
+     else {
+         echo "<a href='wallet.php?genpid=true'><button>Generate payment id</button></a>";
+         echo "<br><img style='background-color: #fff;' src=" . (new QRCode)->render($addr) . "><br>" . "Balance: " . $balance . " TRTL,  Locked: " . $lbalance . " TRTL</p>";
+     }
    }
    function status($walletd) {
      $status = $walletd->getStatus()->getBody()->getContents();
@@ -130,6 +189,9 @@ function logout() {
      else {
        echo "Wallet synced: You can make transactions";
      }
+   }
+   function showtx($tx) {
+     echo "<br>Transaction sent to blockchain: <a target='_blank' href='https://turtle-coin.com/?hash=" . $tx . "#blockchain_transaction'>Watch status</a>";
    }
     ?>
   </div>
@@ -166,23 +228,40 @@ function logout() {
     $ltrans = $walletd->getTransactions($bcount, $fbi, null, $addr)->getBody()->getContents();
     $decltrans = json_decode($ltrans, true);
     $pcount = count($decltrans["result"]["items"]);
-    for ($i=0; $i < $pcount; $i++) {
-      $test = count($decltrans["result"]["items"][$i]["transactions"]);
-      for ($h=0; $h < $test; $h++) {
-        $tcount = count($decltrans["result"]["items"][$i]["transactions"][$h]["transfers"]);
-        for ($j=0; $j < $tcount; $j++) {
-              if ($addr[0] == $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["address"]) {
-                if ($decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] < 0) {
-                  echo "Outgoing: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
-                }
-                else {
-                  echo "Incoming: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;+" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL<br>";
+    if ($pcount != 0) {
+        for ($i = $pcount - 1; $i > 0; $i--) {
+            $test = count($decltrans["result"]["items"][$i]["transactions"]);
+            for ($h = 0; $h < $test; $h++) {
+                $tcount = count($decltrans["result"]["items"][$i]["transactions"][$h]["transfers"]);
+                for ($j = 0; $j < $tcount; $j++) {
+                    if ($addr[0] == $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["address"]) {
+                        if ($decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] < 0) {
+                                if ($decltrans["result"]["items"][$i]["transactions"][0]["paymentId"] != "") {
+                                    echo "Outgoing: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL <br> PaymentId: " . $decltrans["result"]["items"][$i]["transactions"][0]["paymentId"] . "</p>";
+                                }
+                                else {
+                                    echo "Outgoing: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . "</p>";
+                                }
+                            }
+                            else {
+                                if ($decltrans["result"]["items"][$i]["transactions"][0]["paymentId"] != "") {
+                                    echo "Incoming: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;+" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL <br> PaymentId: " . $decltrans["result"]["items"][$i]["transactions"][0]["paymentId"] . "</p>";
+                                }
+                                else {
+                                    echo "Incoming: " . "<a target='_blank' href='https://turtle-coin.com/?hash=" . $decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"] . "#blockchain_transaction'>" . substr($decltrans["result"]["items"][$i]["transactions"][0]["transactionHash"], 0, -30) . "...</a> &nbsp;&nbsp;&nbsp;+" . $decltrans["result"]["items"][$i]["transactions"][0]["transfers"][$j]["amount"] / 100 . " TRTL &nbsp;&nbsp;&nbsp; Fee: " . $decltrans["result"]["items"][$i]["transactions"][0]["fee"] / 100 . " TRTL <br>" . "</p>";
+                                }
+                        }
+                    }
                 }
             }
-          }
-      }
+        }
+    }
+    else {
+        echo "<span style='color: red'>No transactions found!</span>";
     }
      ?>
-   </div>
+   </p>
+   <a href="wallet.php?del=true"><button>Delete this address</button></a><br>
+ !DELETED ADDRESSES ARE NOT RECOVERABLE WITHOUT KEYS!
  </body>
 </html>
