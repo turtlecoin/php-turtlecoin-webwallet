@@ -1,4 +1,5 @@
-
+# DEPRECEATED
+THIS REPO HAS SOME SECURITY ISSUES AND IS PAUSED TEMPORARILY, DON'T USE FOR PRODUCTION USE
 # Requirements
 Requirements: composer, webserver with php7.2, the turtlecoin wallet and mysql.
 # Installation
