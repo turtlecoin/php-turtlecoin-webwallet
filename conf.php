@@ -6,7 +6,7 @@ use TurtleCoin\Walletd;
 $config = [
     'rpcHost'     => "127.0.0.1",
     'rpcPort'     => 8070,
-    'rpcPassword' => "stank",
+    'rpcPassword' => "password",
 ];
 $walletd = new Walletd\Client($config);
 
