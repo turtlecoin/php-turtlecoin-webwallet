@@ -1,10 +1,9 @@
-
 # DEPRECEATED
 THIS REPO HAS SOME SECURITY ISSUES AND IS PAUSED TEMPORARILY, DON'T USE FOR PRODUCTION  STILL A WORK IN PROGRESS
 
-# Requirements
+## Requirements
 Requirements: composer, webserver with php7.2, the turtlecoin wallet and mysql.
-# Installation
+## Installation
 clone this repository into the /var/www/html(Linux) directory or in the htdocs directory(Windows, Mac); The the easiest way to install all librarys for php is running this command: <code>composer require chillerlan/php-qrcode turtlecoin/turtlecoin-walletd-rpc-php</code>.
 Create a database named turtlecoin (or you have to change it in the conf.php) and two tables.  One named addresses and another named members. The tables should have this format:
 <code>CREATE TABLE `turtlecoin`.`addresses`(
