@@ -92,7 +92,7 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
       $suc = $sql->execute();
       if ($suc) {
         echo "You are logged in!";
-        $_SESSION["addr"] = $addr;
+        $_SESSION["username"] = $username;
         header('Location: wallet.php');
       }
       else {
@@ -101,7 +101,7 @@ elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
       $sql->close();
   }
 }
-elseif (!isset($_SESSION["addr"])) {
+elseif (!isset($_SESSION["username"])) {
   logout("Your session timed out!");
 }
 function logout($why) {

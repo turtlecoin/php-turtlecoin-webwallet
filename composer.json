@@ -1,0 +1,6 @@
+{
+    "require": {
+        "chillerlan/php-qrcode": "^2.0",
+        "turtlecoin/turtlecoin-walletd-rpc-php": "^1.2"
+    }
+}
