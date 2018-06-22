@@ -1,20 +1,19 @@
-<?php
-require '../vendor/autoload.php';
+ <?php
+require 'vendor/autoload.php';
 #Config
 use TurtleCoin\Walletd;
 
 $config = [
     'rpcHost'     => "127.0.0.1",
     'rpcPort'     => 8070,
-    'rpcPassword' => "{password}",
+    'rpcPassword' => "password",
 ];
 $walletd = new Walletd\Client($config);
 
 #Server Creds
 $servername = "localhost";
-$user = "{user}";
-$pw = "{password}";
+$user = "<mysql_username>";
+$pw = "<mysql_password>;
 $db = "turtlecoin";
-#Connect to Server
 $con = new mysqli($servername, $user, $pw, $db);
  ?>
